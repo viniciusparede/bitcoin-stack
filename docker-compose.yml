@@ -67,13 +67,41 @@ services:
       - BITCOIN_RPC_USER=${BITCOIN_RPC_USER}
       - BITCOIN_RPC_PASSWORD=${BITCOIN_RPC_PASSWORD}
     volumes:
-      - ${FULCRUM_DATA:-/home/vinicius/fulcrum-data}:/data
+      - ${FULCRUM_DATA}:/data
       - ./fulcrum/fulcrum.conf.template:/fulcrum.conf.template:ro
     ports:
       # Electrum TCP — para carteiras na rede local
       - "127.0.0.1:50001:50001"
     networks:
       - btcnet
+
+  # ──────────────────────────────────────────────
+  # electrs-liquid - Electrum Server para Liquid
+  # ──────────────────────────────────────────────
+  electrs-liquid:
+    build:
+      context: ./electrs-liquid
+    container_name: electrs_liquid
+    restart: unless-stopped
+    depends_on:
+      elementsd:
+        condition: service_started
+    volumes:
+      - ${FULCRUM_LIQUID_DATA}:/data
+    ports:
+      # Electrum TCP para Liquid — para carteiras na rede local
+      - "127.0.0.1:60001:60001"
+    networks:
+      - btcnet
+    command: >
+      electrs
+        --network liquid
+        --daemon-rpc-addr elementsd:7041
+        --daemon-p2p-addr elementsd:7042
+        --cookie ${ELEMENTS_RPC_USER}:${ELEMENTS_RPC_PASSWORD}
+        --electrum-rpc-addr 0.0.0.0:60001
+        --db-dir /data
+        --log-filters INFO
 
   # ──────────────────────────────────────────────
   # Elements Core - Liquid Network (sidechain)
