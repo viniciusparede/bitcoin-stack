@@ -5,7 +5,7 @@
 datadir = /data
 
 # ---- Bitcoin Core (RPC) ----
-bitcoind = http://bitcoind:8332
+bitcoind = bitcoind:8332
 rpcuser = ${BITCOIN_RPC_USER}
 rpcpassword = ${BITCOIN_RPC_PASSWORD}
 
