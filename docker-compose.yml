@@ -1,0 +1,92 @@
+services:
+
+  # ──────────────────────────────────────────────
+  # Tor - SOCKS5 proxy + hidden service automático
+  # ──────────────────────────────────────────────
+  tor:
+    build: ./tor
+    container_name: btc_tor
+    restart: unless-stopped
+    volumes:
+      - tor_data:/var/lib/tor
+    networks:
+      - btcnet
+    healthcheck:
+      # Aguarda o SOCKS proxy do Tor estar pronto na porta 9050
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/127.0.0.1/9050' 2>/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
+
+  # ──────────────────────────────────────────────
+  # Bitcoin Core - nó completo com Tor habilitado
+  # ──────────────────────────────────────────────
+  bitcoind:
+    build:
+      context: ./bitcoin
+      args:
+        BITCOIN_VERSION: ${BITCOIN_VERSION:-28.1}
+    container_name: btc_node
+    restart: unless-stopped
+    depends_on:
+      tor:
+        condition: service_healthy
+    volumes:
+      - ${BITCOIN_DATA}:/data
+      # Configuração montada sobre o bitcoin.conf vazio que já existe no datadir
+      - ./bitcoin/bitcoin.conf:/data/bitcoin.conf:ro
+    ports:
+      # RPC — apenas localhost (não expõe na rede)
+      - "127.0.0.1:8332:8332"
+      # P2P — exposto para receber conexões clearnet de entrada
+      - "8333:8333"
+    networks:
+      - btcnet
+    command: >
+      bitcoind
+        -datadir=/data
+        -pid=/data/bitcoind.pid
+        -rpcuser=${BITCOIN_RPC_USER}
+        -rpcpassword=${BITCOIN_RPC_PASSWORD}
+
+  # ──────────────────────────────────────────────
+  # Elements Core - Liquid Network (sidechain)
+  # ──────────────────────────────────────────────
+  elementsd:
+    build:
+      context: ./elements
+      args:
+        ELEMENTS_VERSION: ${ELEMENTS_VERSION:-23.3.2}
+    container_name: elements_node
+    restart: unless-stopped
+    depends_on:
+      tor:
+        condition: service_healthy
+      bitcoind:
+        condition: service_started
+    volumes:
+      - ${ELEMENTS_DATA}:/data
+      - ./elements/elements.conf:/data/elements.conf:ro
+    ports:
+      # RPC — apenas localhost
+      - "127.0.0.1:7041:7041"
+      # P2P — exposto para conexões de entrada
+      - "7042:7042"
+    networks:
+      - btcnet
+    command: >
+      elementsd
+        -datadir=/data
+        -mainchainrpcuser=${BITCOIN_RPC_USER}
+        -mainchainrpcpassword=${BITCOIN_RPC_PASSWORD}
+        -rpcuser=${ELEMENTS_RPC_USER}
+        -rpcpassword=${ELEMENTS_RPC_PASSWORD}
+
+networks:
+  btcnet:
+    driver: bridge
+
+volumes:
+  tor_data:
+    driver: local
