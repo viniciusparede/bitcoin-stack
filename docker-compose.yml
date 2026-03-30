@@ -97,11 +97,10 @@ services:
       electrs
         --network liquid
         --daemon-rpc-addr elementsd:7041
-        --daemon-p2p-addr elementsd:7042
         --cookie ${ELEMENTS_RPC_USER}:${ELEMENTS_RPC_PASSWORD}
         --electrum-rpc-addr 0.0.0.0:60001
         --db-dir /data
-        --log-filters INFO
+        -v
 
   # ──────────────────────────────────────────────
   # Elements Core - Liquid Network (sidechain)
