@@ -51,6 +51,31 @@ services:
         -rpcpassword=${BITCOIN_RPC_PASSWORD}
 
   # ──────────────────────────────────────────────
+  # Fulcrum - Electrum Server (índice Bitcoin)
+  # ──────────────────────────────────────────────
+  fulcrum:
+    build:
+      context: ./fulcrum
+      args:
+        FULCRUM_VERSION: ${FULCRUM_VERSION:-2.1.0}
+    container_name: fulcrum
+    restart: unless-stopped
+    depends_on:
+      bitcoind:
+        condition: service_started
+    environment:
+      - BITCOIN_RPC_USER=${BITCOIN_RPC_USER}
+      - BITCOIN_RPC_PASSWORD=${BITCOIN_RPC_PASSWORD}
+    volumes:
+      - ${FULCRUM_DATA:-/home/vinicius/fulcrum-data}:/data
+      - ./fulcrum/fulcrum.conf.template:/fulcrum.conf.template:ro
+    ports:
+      # Electrum TCP — para carteiras na rede local
+      - "127.0.0.1:50001:50001"
+    networks:
+      - btcnet
+
+  # ──────────────────────────────────────────────
   # Elements Core - Liquid Network (sidechain)
   # ──────────────────────────────────────────────
   elementsd:

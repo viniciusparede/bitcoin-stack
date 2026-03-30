@@ -1,0 +1,30 @@
+# ==============================================================================
+# Fulcrum - Electrum Server para Bitcoin
+# ==============================================================================
+
+datadir = /data
+
+# ---- Bitcoin Core (RPC) ----
+bitcoind = http://bitcoind:8332
+rpcuser = ${BITCOIN_RPC_USER}
+rpcpassword = ${BITCOIN_RPC_PASSWORD}
+
+# ---- Electrum Protocol ----
+# TCP — para clientes na rede local
+tcp = 0.0.0.0:50001
+
+# SSL — descomente e aponte para seus certificados para expor externamente
+# ssl = 0.0.0.0:50002
+# cert = /data/fulcrum.crt
+# key  = /data/fulcrum.key
+
+# ---- Performance ----
+# Threads de worker para indexação (ajuste conforme CPUs disponíveis)
+workers = 4
+
+# Cache do RocksDB em MB (mais = indexação mais rápida)
+db_mem = 1000
+
+# ---- Admin ----
+# Porta local para comandos administrativos via FulcrumAdmin
+admin = 127.0.0.1:8000
