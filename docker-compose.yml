@@ -88,13 +88,15 @@ services:
       fulcrum:
         condition: service_started
     environment:
+      - CANARY_MODE=self-hosted
       - CANARY_NETWORK=mainnet
       - CANARY_ELECTRUM_URL=tcp://fulcrum:50001
-      - CANARY_DATABASE_URL=/data/canary.db
+      - CANARY_DATA_DIR=/data
+      - CANARY_BIND_ADDRESS=0.0.0.0:8000
     volumes:
       - ${CANARY_DATA}:/data
     ports:
-      - "127.0.0.1:8000:8000"
+      - "127.0.0.1:8001:8000"
     networks:
       - btcnet
 
@@ -103,7 +105,7 @@ services:
       context: ./canary
       dockerfile: Dockerfile.frontend
       args:
-        NEXT_PUBLIC_API_BASE_URL: http://localhost:8000
+        NEXT_PUBLIC_API_BASE_URL: http://localhost:8001
     container_name: canary_frontend
     restart: unless-stopped
     depends_on:
