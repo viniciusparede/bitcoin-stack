@@ -6,6 +6,6 @@ SocksPort 0.0.0.0:9050
 
 # Control port - usado pelo Bitcoin Core para criar automaticamente o hidden service v3
 ControlPort 0.0.0.0:9051
-CookieAuthentication 0
+# HashedControlPassword é injetado em runtime pelo entrypoint via TOR_HASHED_PASSWORD
 
 Log notice stderr

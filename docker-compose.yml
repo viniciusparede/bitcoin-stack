@@ -7,6 +7,8 @@ services:
     build: ./tor
     container_name: btc_tor
     restart: unless-stopped
+    environment:
+      - TOR_CONTROL_PASSWORD=${TOR_CONTROL_PASSWORD}
     volumes:
       - tor_data:/var/lib/tor
     networks:
@@ -34,7 +36,6 @@ services:
         condition: service_healthy
     volumes:
       - ${BITCOIN_DATA}:/data
-      # Configuração montada sobre o bitcoin.conf vazio que já existe no datadir
       - ./bitcoin/bitcoin.conf:/data/bitcoin.conf:ro
     ports:
       # RPC — apenas localhost (não expõe na rede)
@@ -49,6 +50,7 @@ services:
         -pid=/data/bitcoind.pid
         -rpcuser=${BITCOIN_RPC_USER}
         -rpcpassword=${BITCOIN_RPC_PASSWORD}
+        -torpassword=${TOR_CONTROL_PASSWORD}
 
   # ──────────────────────────────────────────────
   # Fulcrum - Electrum Server (índice Bitcoin)

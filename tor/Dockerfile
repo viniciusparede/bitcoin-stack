@@ -8,9 +8,11 @@ RUN apt-get update \
   && chmod 700 /var/lib/tor /var/run/tor
 
 COPY torrc /etc/tor/torrc
-RUN chown root:debian-tor /etc/tor/torrc && chmod 640 /etc/tor/torrc
+COPY entrypoint.sh /entrypoint.sh
+RUN chown root:debian-tor /etc/tor/torrc && chmod 640 /etc/tor/torrc \
+  && chmod +x /entrypoint.sh
 
 EXPOSE 9050 9051
 
 USER debian-tor
-CMD ["tor", "-f", "/etc/tor/torrc"]
+ENTRYPOINT ["/entrypoint.sh"]
