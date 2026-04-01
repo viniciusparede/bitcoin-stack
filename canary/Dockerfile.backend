@@ -1,0 +1,27 @@
+# ── Stage 1: compilação ──────────────────────────────────────────────────────
+FROM rust:bookworm AS builder
+
+RUN apt-get update \
+  && apt-get install -qfy git libssl-dev pkg-config
+
+RUN git clone --depth 1 https://github.com/schjonhaug/canary /build
+
+WORKDIR /build/backend
+
+RUN cargo build --release
+
+# ── Stage 2: imagem final ─────────────────────────────────────────────────────
+FROM debian:bookworm-slim
+
+RUN apt-get update \
+  && apt-get install -qfy ca-certificates libssl3 \
+  && apt-get clean && apt-get autoclean
+
+WORKDIR /app
+
+COPY --from=builder /build/backend/target/release/canary /usr/local/bin/canary
+COPY --from=builder /build/backend/migrations ./migrations
+
+EXPOSE 8000
+
+CMD ["canary"]

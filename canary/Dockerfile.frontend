@@ -1,0 +1,32 @@
+# ── Stage 1: build ───────────────────────────────────────────────────────────
+FROM node:20-alpine AS builder
+
+ARG NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
+
+RUN apk add --no-cache git \
+  && corepack enable
+
+RUN git clone --depth 1 https://github.com/schjonhaug/canary /build
+
+WORKDIR /build/frontend
+
+RUN echo "NEXT_PUBLIC_API_BASE_URL=${NEXT_PUBLIC_API_BASE_URL}" > .env.local \
+  && echo "NEXT_PUBLIC_NOTIFICATION_PROVIDER=ntfy" >> .env.local
+
+RUN pnpm install --frozen-lockfile \
+  && pnpm build
+
+# ── Stage 2: imagem final ─────────────────────────────────────────────────────
+FROM node:20-alpine
+
+WORKDIR /app
+
+COPY --from=builder /build/frontend/.next/standalone ./
+COPY --from=builder /build/frontend/.next/static ./.next/static
+COPY --from=builder /build/frontend/public ./public
+
+EXPOSE 3001
+
+ENV PORT=3001
+
+CMD ["node", "server.js"]
