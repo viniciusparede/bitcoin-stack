@@ -76,6 +76,45 @@ services:
       - btcnet
 
   # ──────────────────────────────────────────────
+  # Canary - Monitor de wallets Bitcoin
+  # ──────────────────────────────────────────────
+  canary-backend:
+    build:
+      context: ./canary
+      dockerfile: Dockerfile.backend
+    container_name: canary_backend
+    restart: unless-stopped
+    depends_on:
+      fulcrum:
+        condition: service_started
+    environment:
+      - CANARY_NETWORK=mainnet
+      - CANARY_ELECTRUM_URL=tcp://fulcrum:50001
+      - CANARY_DATABASE_URL=/data/canary.db
+    volumes:
+      - ${CANARY_DATA}:/data
+    ports:
+      - "127.0.0.1:8000:8000"
+    networks:
+      - btcnet
+
+  canary-frontend:
+    build:
+      context: ./canary
+      dockerfile: Dockerfile.frontend
+      args:
+        NEXT_PUBLIC_API_BASE_URL: http://localhost:8000
+    container_name: canary_frontend
+    restart: unless-stopped
+    depends_on:
+      canary-backend:
+        condition: service_started
+    ports:
+      - "127.0.0.1:3001:3001"
+    networks:
+      - btcnet
+
+  # ──────────────────────────────────────────────
   # electrs-liquid - Electrum Server para Liquid
   # ──────────────────────────────────────────────
   electrs-liquid:

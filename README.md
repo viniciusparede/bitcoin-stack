@@ -1,158 +1,210 @@
-# Bitcoin Node + Tor — Stack Docker
+# bitcoin-stack
 
-Nó completo do Bitcoin Core roteando todas as conexões pela rede Tor, com hidden service v3 automático.
+A self-hosted Bitcoin full node stack running entirely over Tor, with Electrum indexing, Liquid Network support, and wallet monitoring — all orchestrated via Docker Compose.
 
-Baseado em: [Blockstream/bitcoin-images](https://github.com/Blockstream/bitcoin-images)
-
----
-
-## Estrutura
-
-```
-bitcoin-stack/
-├── docker-compose.yml
-├── .env                        # versão do Bitcoin Core e credenciais RPC
-├── bitcoin/
-│   ├── Dockerfile              # baixa e verifica assinatura GPG do Bitcoin Core
-│   └── bitcoin.conf            # configuração com Tor habilitado
-├── tor/
-│   ├── Dockerfile
-│   └── torrc                   # SOCKS5 :9050 + control port :9051
-└── scripts/
-    └── onion-address.sh        # exibe o endereço .onion do nó
-```
+Based on: [Blockstream/bitcoin-images](https://github.com/Blockstream/bitcoin-images)
 
 ---
 
-## Pré-requisitos
+## Services
+
+| Container | Image | Purpose | Port |
+|-----------|-------|---------|------|
+| `btc_tor` | custom | Tor SOCKS5 proxy + v3 hidden service | 9050, 9051 |
+| `btc_node` | custom | Bitcoin Core full node (mainnet + Tor) | 8332 (RPC), 8333 (P2P) |
+| `fulcrum` | custom | Fulcrum Electrum server for Bitcoin | 50001 |
+| `elements_node` | custom | Elements / Liquid Network full node | 7041 (RPC), 7042 (P2P) |
+| `electrs_liquid` | custom | electrs Electrum server for Liquid | 60001 |
+| `canary_backend` | custom | Canary wallet monitor — Rust API | 8000 |
+| `canary_frontend` | custom | Canary wallet monitor — Next.js UI | 3001 |
+
+---
+
+## Storage layout
+
+This stack is designed for a **two-disk setup**:
+
+```
+HDD  (/mnt/hd)                     ← large/slow disk
+└── bitcoin/                        Bitcoin Core blockchain (~700 GB)
+
+NVMe (/home/<user>)                 ← fast disk
+├── fulcrum-data/                   Fulcrum index (~100 GB)
+├── elements-data/                  Liquid blockchain (~10 GB)
+├── electrs-liquid-data/            electrs Liquid index (~5 GB)
+└── canary-data/                    Canary app data (< 1 GB)
+```
+
+All paths are configured via `.env`. See `.env.example` for details.
+
+---
+
+## Requirements
 
 - Docker >= 24
 - Docker Compose >= v2
-- HD externo montado em `/media/vinicius/1943edf9-e864-4ba8-af98-55894eff1418` (blockchain já sincronizada)
+- HDD mounted at `/mnt/hd` with Bitcoin blockchain data
 
 ---
 
-## Como subir
+## Getting started
 
 ```bash
-cd /home/vinicius/bitcoin-stack
+# 1. Clone the repo
+git clone https://github.com/viniciusparede/bitcoin-stack
+cd bitcoin-stack
 
-# 1. Build das imagens (baixa o Bitcoin Core 28.1 e verifica a assinatura GPG)
+# 2. Configure environment
+cp .env.example .env
+# Edit .env with your paths and credentials
+
+# 3. Copy and configure bitcoin.conf
+cp bitcoin/bitcoin.conf.example bitcoin/bitcoin.conf
+# Edit bitcoin/bitcoin.conf as needed
+
+# 4. Create data directories on NVMe
+mkdir -p ~/fulcrum-data ~/elements-data ~/electrs-liquid-data ~/canary-data
+
+# 5. Build images
 docker compose build
 
-# 2. Sobe a stack em background
+# 6. Start the stack
 docker compose up -d
 ```
 
-O Tor sobe primeiro. O Bitcoin Core só inicia após o proxy Tor estar pronto (healthcheck).
+Tor starts first. Bitcoin Core waits for the Tor proxy healthcheck before starting.
 
 ---
 
-## Comandos úteis
+## Configuration
+
+### bitcoin.conf
+
+`bitcoin/bitcoin.conf` is **gitignored** (it may contain personal data such as trusted node addresses).
+Use `bitcoin/bitcoin.conf.example` as a starting point.
+
+### Credentials
+
+All credentials live in `.env` (gitignored). Never commit `.env`.
+
+RPC passwords are passed to containers via Docker Compose `command:` arguments —
+no secrets are baked into images or config files tracked by git.
+
+---
+
+## Useful commands
 
 ```bash
-# Ver logs em tempo real
+# View logs
 docker compose logs -f
-
-# Ver logs de um serviço específico
 docker compose logs -f bitcoind
-docker compose logs -f tor
 
-# Status dos containers
+# Container status
 docker compose ps
 
-# Parar a stack
-docker compose down
-
-# Parar preservando os volumes
+# Stop the stack (containers will restart on next boot)
 docker compose stop
+
+# Stop and remove containers
+docker compose down
 ```
 
----
-
-## Bitcoin CLI
+### Bitcoin CLI
 
 ```bash
-# Informações gerais do nó
-docker exec btc_node bitcoin-cli -datadir=/data -conf=/bitcoin.conf getnetworkinfo
+# Node info
+docker exec btc_node bitcoin-cli -datadir=/data getnetworkinfo
 
-# Peers conectados
-docker exec btc_node bitcoin-cli -datadir=/data -conf=/bitcoin.conf getpeerinfo
+# Connected peers
+docker exec btc_node bitcoin-cli -datadir=/data getpeerinfo
 
-# Status da blockchain
-docker exec btc_node bitcoin-cli -datadir=/data -conf=/bitcoin.conf getblockchaininfo
+# Blockchain status
+docker exec btc_node bitcoin-cli -datadir=/data getblockchaininfo
 
 # Mempool
-docker exec btc_node bitcoin-cli -datadir=/data -conf=/bitcoin.conf getmempoolinfo
+docker exec btc_node bitcoin-cli -datadir=/data getmempoolinfo
+```
+
+### Elements CLI
+
+```bash
+# Liquid blockchain status
+docker exec elements_node elements-cli -datadir=/data getblockchaininfo
+
+# Liquid network info
+docker exec elements_node elements-cli -datadir=/data getnetworkinfo
+```
+
+### Fulcrum admin
+
+```bash
+# Fulcrum sync status
+docker exec fulcrum FulcrumAdmin -p 8000 status
 ```
 
 ---
 
-## Endereço .onion
+## Onion address
 
-O Bitcoin Core cria automaticamente um hidden service v3 via `torcontrol`.
-A chave privada do endereço persiste em `/data/onion_v3_private_key` (no HD externo).
+Bitcoin Core automatically creates a v3 hidden service via `torcontrol`.
+The private key persists at `/data/onion_v3_private_key` (on the HDD).
 
 ```bash
-# Exibir o endereço .onion do nó
+# Display the node's .onion address
 ./scripts/onion-address.sh
-
-# Ou diretamente via bitcoin-cli
-docker exec btc_node bitcoin-cli -datadir=/data -conf=/bitcoin.conf getnetworkinfo \
-  | python3 -c "import sys,json; [print(a['address']) for a in json.load(sys.stdin)['localaddresses'] if '.onion' in a['address']]"
 ```
 
----
-
-## Nós de confiança
-
-Configurado em `bitcoin/bitcoin.conf` via `addnode`:
-
-```
-# addnode=seunodo.onion:8333
-```
-
-Para adicionar um nó em tempo real (sem reiniciar):
+To add a trusted peer at runtime (no restart required):
 
 ```bash
-docker exec btc_node bitcoin-cli -datadir=/data -conf=/bitcoin.conf \
-  addnode "<endereço>.onion:8333" add
+docker exec btc_node bitcoin-cli -datadir=/data \
+  addnode "<address>.onion:8333" add
 ```
 
 ---
 
-## Modo somente-Tor (opcional)
+## Ports
 
-Para conectar **apenas** a peers .onion (mais privado, menos peers), edite `bitcoin/bitcoin.conf` e descomente:
+All ports are bound to `127.0.0.1` (localhost only) except Bitcoin P2P (8333) and Liquid P2P (7042), which accept inbound connections.
 
-```
-onlynet=onion
-```
+| Service | Port | Exposure |
+|---------|------|----------|
+| Bitcoin RPC | 8332 | localhost only |
+| Bitcoin P2P | 8333 | public |
+| Fulcrum (Bitcoin Electrum) | 50001 | localhost only |
+| Liquid RPC | 7041 | localhost only |
+| Liquid P2P | 7042 | public |
+| electrs Liquid Electrum | 60001 | localhost only |
+| Canary API | 8000 | localhost only |
+| Canary UI | 3001 | localhost only |
 
-Depois reinicie o bitcoind:
+---
+
+## Canary wallet monitor
+
+Canary watches Bitcoin wallets (read-only) and sends alerts for transactions and balance changes.
+
+- Open `http://localhost:3001` in your browser
+- Supports Sparrow, BlueWallet, Ledger, Trezor (via xpub / descriptors)
+- Notifications via [ntfy](https://ntfy.sh)
+- Connects to your local Fulcrum instance on port 50001
+
+---
+
+## Auto-start on boot
+
+All services use `restart: unless-stopped`. Docker is enabled at system startup, so the entire stack restarts automatically after a reboot or power loss.
+
+To stop a service permanently (so it does not restart on boot):
 
 ```bash
-docker compose restart bitcoind
+docker compose stop <service>
+# followed by:
+docker compose rm <service>
 ```
 
 ---
 
-## Monitorar espaço em disco
+## License
 
-O HD está com ~94% de uso. Monitore regularmente:
-
-```bash
-df -h /media/vinicius/1943edf9-e864-4ba8-af98-55894eff1418
-```
-
----
-
-## RPC
-
-| Campo    | Valor                                      |
-|----------|--------------------------------------------|
-| Host     | `127.0.0.1:8332`                           |
-| Usuário  | `bitcoin`                                  |
-| Senha    | ver `.env` → `BITCOIN_RPC_PASSWORD`        |
-
-> A porta RPC **não** é exposta na rede — apenas em `localhost`.
+MIT
